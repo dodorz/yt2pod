@@ -20,6 +20,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest", "ruff"]
 
+[project.scripts]
+yt2pod = "yt2pod.cli:main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/yt2pod"]
 

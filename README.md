@@ -16,9 +16,9 @@ All commands use `uv run` from the project root.
 ### Web Server
 
 ```bash
-uv run --directory . yt2pod serve
+uv run yt2pod serve
 # or with custom host/port
-uv run --directory . yt2pod serve --host 0.0.0.0 --port 8000
+uv run yt2pod serve --host 0.0.0.0 --port 8000
 ```
 
 Open http://localhost:8000 to add and manage feeds.
@@ -26,16 +26,16 @@ Open http://localhost:8000 to add and manage feeds.
 ### CLI - Generate RSS File
 
 ```bash
-uv run --directory . yt2pod generate https://www.youtube.com/@channelname -o feed.xml
-uv run --directory . yt2pod generate https://www.youtube.com/playlist?list=PLxxx -o playlist.xml -n 20
+uv run yt2pod generate https://www.youtube.com/@channelname -o feed.xml
+uv run yt2pod generate https://www.youtube.com/playlist?list=PLxxx -o playlist.xml -n 20
 ```
 
 ### CLI - Manage Scheduled Feeds
 
 ```bash
-uv run --directory . yt2pod add https://www.youtube.com/@channelname
-uv run --directory . yt2pod list
-uv run --directory . yt2pod refresh
+uv run yt2pod add https://www.youtube.com/@channelname
+uv run yt2pod list
+uv run yt2pod refresh
 ```
 
 ## Configuration
