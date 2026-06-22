@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube2Podcast</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f0f; color: #e0e0e0; }
+        .container { max-width: 800px; margin: 0 auto; padding: 2rem 1rem; }
+        h1 { font-size: 2rem; margin-bottom: 0.5rem; color: #ff4444; }
+        .subtitle { color: #888; margin-bottom: 2rem; }
+        .add-form { display: flex; gap: 0.5rem; margin-bottom: 2rem; }
+        .add-form input { flex: 1; padding: 0.75rem 1rem; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; color: #fff; font-size: 1rem; }
+        .add-form input:focus { outline: none; border-color: #ff4444; }
+        .add-form button { padding: 0.75rem 1.5rem; background: #ff4444; color: #fff; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; font-weight: 600; }
+        .add-form button:hover { background: #cc3333; }
+        .add-form button:disabled { background: #555; cursor: not-allowed; }
+        .feed-list { list-style: none; }
+        .feed-item { display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: #1a1a1a; border-radius: 8px; margin-bottom: 0.5rem; }
+        .feed-info { flex: 1; min-width: 0; }
+        .feed-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .feed-meta { font-size: 0.85rem; color: #888; margin-top: 0.25rem; }
+        .feed-actions { display: flex; gap: 0.5rem; margin-left: 1rem; }
+        .btn-sm { padding: 0.4rem 0.8rem; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+        .btn-rss { background: #ff8800; color: #fff; }
+        .btn-refresh { background: #333; color: #ccc; }
+        .btn-delete { background: #333; color: #ff4444; }
+        .btn-sm:hover { opacity: 0.85; }
+        .status { padding: 0.5rem 1rem; border-radius: 6px; margin-bottom: 1rem; display: none; }
+        .status.ok { display: block; background: #1a3a1a; color: #44ff44; border: 1px solid #2a5a2a; }
+        .status.err { display: block; background: #3a1a1a; color: #ff4444; border: 1px solid #5a2a2a; }
+        .empty { text-align: center; padding: 3rem; color: #555; }
+        .rss-url { font-family: monospace; font-size: 0.8rem; color: #888; word-break: break-all; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>YouTube2Podcast</h1>
+        <p class="subtitle">Convert YouTube channels to podcast RSS feeds</p>
+
+        <div id="status" class="status"></div>
+
+        <div class="add-form">
+            <input type="text" id="url-input" placeholder="YouTube channel or playlist URL...">
+            <button id="add-btn" onclick="addFeed()">Add Feed</button>
+        </div>
+
+        <ul class="feed-list" id="feed-list">
+            {% for feed in feeds %}
+            <li class="feed-item" id="feed-{{ feed.feed_id }}">
+                <div class="feed-info">
+                    <div class="feed-name">{{ feed.get('channel_name', feed.feed_id) }}</div>
+                    <div class="feed-meta">
+                        ID: {{ feed.feed_id }} &middot; Last update: {{ feed.get('last_update', 'never') }}
+                    </div>
+                </div>
+                <div class="feed-actions">
+                    <a href="/feeds/{{ feed.feed_id }}.xml" class="btn-sm btn-rss" target="_blank">RSS</a>
+                    <button class="btn-sm btn-refresh" onclick="refreshFeed('{{ feed.feed_id }}')">Refresh</button>
+                    <button class="btn-sm btn-delete" onclick="deleteFeed('{{ feed.feed_id }}')">Delete</button>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+
+        {% if not feeds %}
+        <div class="empty">No feeds yet. Add a YouTube channel URL above to get started.</div>
+        {% endif %}
+    </div>
+
+    <script>
+        function showStatus(msg, ok) {
+            const el = document.getElementById('status');
+            el.textContent = msg;
+            el.className = 'status ' + (ok ? 'ok' : 'err');
+            setTimeout(() => { el.className = 'status'; }, 5000);
+        }
+
+        async function addFeed() {
+            const input = document.getElementById('url-input');
+            const url = input.value.trim();
+            if (!url) return;
+
+            const btn = document.getElementById('add-btn');
+            btn.disabled = true;
+            btn.textContent = 'Adding...';
+
+            try {
+                const res = await fetch('/api/feeds', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url }),
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showStatus(`Added: ${data.channel_name}. RSS: ${data.rss_url}`, true);
+                    input.value = '';
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showStatus(data.detail || 'Failed to add feed', false);
+                }
+            } catch (e) {
+                showStatus('Network error: ' + e.message, false);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Add Feed';
+            }
+        }
+
+        async function refreshFeed(feedId) {
+            try {
+                const res = await fetch(`/api/feeds/${feedId}/refresh`, { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    showStatus(`Refreshed: ${data.channel_name} (${data.video_count} videos)`, true);
+                } else {
+                    showStatus(data.detail || 'Refresh failed', false);
+                }
+            } catch (e) {
+                showStatus('Network error: ' + e.message, false);
+            }
+        }
+
+        async function deleteFeed(feedId) {
+            if (!confirm('Delete this feed?')) return;
+            try {
+                const res = await fetch(`/api/feeds/${feedId}`, { method: 'DELETE' });
+                if (res.ok) {
+                    document.getElementById('feed-' + feedId)?.remove();
+                    showStatus('Feed deleted', true);
+                }
+            } catch (e) {
+                showStatus('Network error: ' + e.message, false);
+            }
+        }
+
+        document.getElementById('url-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') addFeed();
+        });
+    </script>
+</body>
+</html>
