@@ -36,7 +36,7 @@ async def shutdown():
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     feeds = scheduler.list_feeds()
-    return templates.TemplateResponse("index.html", {"request": request, "feeds": feeds})
+    return templates.TemplateResponse(request, "index.html", {"feeds": feeds})
 
 
 @app.post("/api/feeds")
