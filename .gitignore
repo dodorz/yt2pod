@@ -8,6 +8,7 @@ __pycache__/
 dist/
 build/
 wheels/
+uv.lock
 
 data/
 .env

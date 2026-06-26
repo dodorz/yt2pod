@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     model_config = {"env_prefix": "YT2POD_"}
 
     host: str = "0.0.0.0"
-    port: int = 8000
+    port: int = 14732
     data_dir: Path = Path("data")
     cache_ttl: int = 3600
     update_interval: int = 3600

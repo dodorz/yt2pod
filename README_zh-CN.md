@@ -21,7 +21,7 @@ uv run --directory . yt2pod serve
 uv run --directory . yt2pod serve --host 0.0.0.0 --port 8000
 ```
 
-打开 http://localhost:8000 以添加和管理订阅源。
+打开 http://localhost:14732 以添加和管理订阅源。
 
 ### CLI - 生成 RSS 文件
 

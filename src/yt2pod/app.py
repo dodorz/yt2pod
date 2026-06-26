@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
+import importlib.resources
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
@@ -16,7 +18,8 @@ from .youtube import fetch_feed
 
 app = FastAPI(title="YouTube2Podcast", version="0.1.0")
 
-templates = Jinja2Templates(directory=str(Path(__file__).parent.parent.parent / "templates"))
+_templates_dir = str(importlib.resources.files("yt2pod").parent.parent / "templates")
+templates = Jinja2Templates(directory=_templates_dir)
 
 
 @app.on_event("startup")

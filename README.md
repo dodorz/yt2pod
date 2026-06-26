@@ -21,7 +21,7 @@ uv run yt2pod serve
 uv run yt2pod serve --host 0.0.0.0 --port 8000
 ```
 
-Open http://localhost:8000 to add and manage feeds.
+Open http://localhost:14732 to add and manage feeds.
 
 ### CLI - Generate RSS File
 
