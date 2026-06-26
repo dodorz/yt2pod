@@ -8,6 +8,7 @@ from pathlib import Path
 from .config import settings
 from .rss import generate_rss
 from .scheduler import scheduler
+from .takeout import parse_takeout_file
 from .youtube import fetch_feed
 
 
@@ -30,6 +31,9 @@ def main():
     cmd_add = sub.add_parser("add", help="Add a feed to the scheduler")
     cmd_add.add_argument("url", help="YouTube channel or playlist URL")
 
+    cmd_import = sub.add_parser("import-takeout", help="Import subscriptions from Google Takeout CSV")
+    cmd_import.add_argument("csv_file", help="Path to subscriptions.csv from Google Takeout")
+
     cmd_list = sub.add_parser("list", help="List scheduled feeds")
     cmd_refresh = sub.add_parser("refresh", help="Refresh all feeds")
 
@@ -41,6 +45,8 @@ def main():
         _generate_feed(args.url, args.output, args.max_videos)
     elif args.command == "add":
         _add_feed(args.url)
+    elif args.command == "import-takeout":
+        _import_takeout(args.csv_file)
     elif args.command == "list":
         _list_feeds()
     elif args.command == "refresh":
@@ -70,6 +76,33 @@ def _add_feed(url: str):
         print(f"Added feed: {feed.channel_name} (id: {feed_id})")
     else:
         print(f"Added feed with id: {feed_id} (refresh pending)")
+
+
+def _import_takeout(csv_path: str):
+    path = Path(csv_path)
+    if not path.exists():
+        print(f"Error: File not found: {csv_path}")
+        return
+
+    channels = parse_takeout_file(path)
+    if not channels:
+        print("No valid channels found in CSV file.")
+        return
+
+    print(f"Found {len(channels)} channels in CSV.")
+    added = 0
+    skipped = 0
+    for ch in channels:
+        with scheduler._lock:
+            if ch["url"] in [f.get("url") for f in scheduler._feeds.values()]:
+                print(f"  Skip (duplicate): {ch['name'] or ch['url']}")
+                skipped += 1
+                continue
+        feed_id = scheduler.add_feed(ch["url"])
+        print(f"  Added: {ch['name'] or feed_id} (id: {feed_id})")
+        added += 1
+
+    print(f"\nDone: {added} added, {skipped} skipped (duplicates).")
 
 
 def _list_feeds():

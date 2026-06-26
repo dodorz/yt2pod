@@ -6,7 +6,7 @@ from typing import Optional
 
 import importlib.resources
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
@@ -15,6 +15,7 @@ from .models import Feed
 from .proxy import proxy_audio
 from .rss import generate_rss
 from .scheduler import scheduler
+from .takeout import parse_takeout_csv
 from .youtube import fetch_feed
 
 app = FastAPI(title="YouTube2Podcast", version="0.1.0")
@@ -114,6 +115,31 @@ async def proxy_stream(video_id: str):
         media_type="audio/mpeg",
         headers={"Content-Disposition": f'attachment; filename="{video_id}.mp3"'},
     )
+
+
+@app.post("/api/import/takeout")
+async def import_takeout(file: UploadFile = File(...)):
+    if not file.filename or not file.filename.lower().endswith((".csv", ".zip")):
+        raise HTTPException(400, "Please upload a CSV or ZIP file from Google Takeout")
+
+    content = await file.read()
+    text = content.decode("utf-8-sig")
+    channels = parse_takeout_csv(text)
+
+    if not channels:
+        raise HTTPException(400, "No valid channels found in CSV")
+
+    added = []
+    skipped = []
+    for ch in channels:
+        with scheduler._lock:
+            if ch["url"] in [f.get("url") for f in scheduler._feeds.values()]:
+                skipped.append(ch["name"] or ch["url"])
+                continue
+        feed_id = scheduler.add_feed(ch["url"])
+        added.append(ch["name"] or feed_id)
+
+    return {"added": len(added), "skipped": len(skipped), "channels": added, "duplicates": skipped}
 
 
 @app.get("/api/preview")
