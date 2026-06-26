@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Optional
 
@@ -47,7 +48,7 @@ async def add_feed(request: Request):
         raise HTTPException(400, "URL is required")
 
     feed_id = scheduler.add_feed(url)
-    feed = scheduler.refresh_feed(feed_id)
+    feed = await asyncio.to_thread(scheduler.refresh_feed, feed_id)
     if not feed:
         raise HTTPException(500, "Failed to fetch feed")
 
@@ -76,7 +77,7 @@ async def delete_feed(feed_id: str):
 
 @app.post("/api/feeds/{feed_id}/refresh")
 async def refresh_feed(feed_id: str):
-    feed = scheduler.refresh_feed(feed_id)
+    feed = await asyncio.to_thread(scheduler.refresh_feed, feed_id)
     if not feed:
         raise HTTPException(404, "Feed not found or refresh failed")
     return {"ok": True, "channel_name": feed.channel_name, "video_count": len(feed.videos)}
