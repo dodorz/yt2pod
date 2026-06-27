@@ -35,6 +35,7 @@ def main():
 
     cmd_import = sub.add_parser("import-takeout", help="Import subscriptions from Google Takeout CSV")
     cmd_import.add_argument("csv_file", help="Path to subscriptions.csv from Google Takeout")
+    cmd_import.add_argument("-a", "--all", action="store_true", help="Import all channels without prompting")
 
     cmd_list = sub.add_parser("list", help="List scheduled feeds")
     cmd_refresh = sub.add_parser("refresh", help="Refresh all feeds")
@@ -48,7 +49,7 @@ def main():
     elif args.command == "add":
         _add_feed(args.url)
     elif args.command == "import-takeout":
-        _import_takeout(args.csv_file)
+        _import_takeout(args.csv_file, import_all=args.all)
     elif args.command == "list":
         _list_feeds()
     elif args.command == "refresh":
@@ -88,7 +89,7 @@ def _add_feed(url: str):
         print(f"Added feed with id: {feed_id} (refresh pending)")
 
 
-def _import_takeout(csv_path: str):
+def _import_takeout(csv_path: str, import_all: bool = False):
     path = Path(csv_path)
     if not path.exists():
         print(f"Error: File not found: {csv_path}")
@@ -99,20 +100,75 @@ def _import_takeout(csv_path: str):
         print("No valid channels found in CSV file.")
         return
 
-    print(f"Found {len(channels)} channels in CSV.")
+    print(f"Found {len(channels)} channels in CSV.\n")
+
+    if import_all:
+        selected = list(range(len(channels)))
+    else:
+        selected = _interactive_select(channels)
+
+    if not selected:
+        print("No channels selected. Aborting.")
+        return
+
+    print()
     added = 0
     skipped = 0
-    for ch in channels:
+    for idx in selected:
+        ch = channels[idx]
         with scheduler._lock:
             if ch["url"] in [f.get("url") for f in scheduler._feeds.values()]:
                 print(f"  Skip (duplicate): {ch['name'] or ch['url']}")
                 skipped += 1
                 continue
-        feed_id = scheduler.add_feed(ch["url"])
+        feed_id = scheduler.add_feed(ch["url"], channel_name=ch["name"])
         print(f"  Added: {ch['name'] or feed_id} (id: {feed_id})")
         added += 1
 
     print(f"\nDone: {added} added, {skipped} skipped (duplicates).")
+
+
+def _interactive_select(channels: list[dict[str, str]]) -> list[int]:
+    """Show channel list and let user select which to import."""
+    for i, ch in enumerate(channels, 1):
+        name = ch["name"] or "(no title)"
+        url = ch["url"]
+        # Keep display compact
+        if len(url) > 60:
+            url = url[:57] + "..."
+        print(f"  {i:3d}. {name[:40]:40s}  {url}")
+
+    print()
+    print("Enter numbers to select (e.g. 1,3,5-8), 'all', or 'none': ", end="")
+    try:
+        raw = input().strip()
+    except (EOFError, KeyboardInterrupt):
+        return []
+
+    if raw.lower() in ("", "none", "n"):
+        return []
+    if raw.lower() in ("all", "a"):
+        return list(range(len(channels)))
+
+    selected = []
+    for part in raw.replace(" ", "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            try:
+                a, b = part.split("-", 1)
+                selected.extend(range(int(a) - 1, int(b)))
+            except (ValueError, IndexError):
+                print(f"  Warning: invalid range '{part}', skipping")
+        else:
+            try:
+                selected.append(int(part) - 1)
+            except ValueError:
+                print(f"  Warning: invalid number '{part}', skipping")
+
+    # Deduplicate, sort, and clamp to valid range
+    return sorted(set(i for i in selected if 0 <= i < len(channels)))
 
 
 def _list_feeds():

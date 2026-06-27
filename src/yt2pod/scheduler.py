@@ -21,11 +21,11 @@ class FeedScheduler:
         self._running = False
         self._timer: threading.Timer | None = None
 
-    def add_feed(self, url: str, feed_id: str | None = None) -> str:
+    def add_feed(self, url: str, feed_id: str | None = None, channel_name: str = "") -> str:
         with self._lock:
             if feed_id is None:
                 feed_id = url.rsplit("/", 1)[-1] or url.rsplit("/", 2)[-2]
-            self._feeds[feed_id] = {"url": url, "last_update": None, "feed_id": feed_id}
+            self._feeds[feed_id] = {"url": url, "last_update": None, "feed_id": feed_id, "channel_name": channel_name}
             self._save_index()
             return feed_id
 

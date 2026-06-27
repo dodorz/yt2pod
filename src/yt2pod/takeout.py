@@ -9,6 +9,9 @@ from pathlib import Path
 _SUBSCRIPTION_KEYWORDS = {"subscriptions", "订阅"}
 _PLAYLIST_KEYWORDS = {"playlists", "播放列表"}
 _YOUTUBE_KEYWORDS = {"youtube", "youtube music", "youtube 和 youtube music", "youtube and youtube music"}
+_URL_KEYWORDS = ["url", "网址", "链接"]
+_TITLE_KEYWORDS = ["title", "name", "标题", "名称"]
+_ID_KEYWORDS = ["id", "标识符"]
 
 
 def parse_takeout_csv(csv_content: str) -> list[dict[str, str]]:
@@ -20,9 +23,9 @@ def parse_takeout_csv(csv_content: str) -> list[dict[str, str]]:
         channel_name = ""
         for key in row:
             lower = key.lower().strip()
-            if "url" in lower:
+            if any(kw in lower for kw in _URL_KEYWORDS):
                 channel_url = row[key].strip()
-            elif "name" in lower or "title" in lower or "channel" in lower:
+            elif any(kw in lower for kw in _TITLE_KEYWORDS) and not any(kw in lower for kw in _ID_KEYWORDS):
                 channel_name = row[key].strip()
 
         if not channel_url:

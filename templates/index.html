@@ -38,6 +38,29 @@
         .import-form input[type="file"] { flex: 1; padding: 0.5rem; background: #0f0f0f; border: 1px solid #333; border-radius: 6px; color: #fff; }
         .import-form button { padding: 0.5rem 1rem; background: #333; color: #ccc; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
         .import-form button:hover { background: #444; }
+
+        /* Selection modal */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-overlay.active { display: flex; }
+        .modal { background: #1a1a1a; border: 1px solid #333; border-radius: 12px; width: 90%; max-width: 700px; max-height: 80vh; display: flex; flex-direction: column; }
+        .modal-header { padding: 1rem 1.25rem; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h2 { font-size: 1.1rem; color: #ff4444; }
+        .modal-header .count { color: #888; font-size: 0.85rem; }
+        .modal-body { padding: 0.5rem 0; overflow-y: auto; flex: 1; }
+        .modal-body label { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1.25rem; cursor: pointer; transition: background 0.15s; }
+        .modal-body label:hover { background: #252525; }
+        .modal-body input[type="checkbox"] { width: 18px; height: 18px; accent-color: #ff4444; cursor: pointer; flex-shrink: 0; }
+        .modal-body .ch-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .modal-body .ch-url { font-size: 0.75rem; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+        .modal-footer { padding: 0.75rem 1.25rem; border-top: 1px solid #333; display: flex; gap: 0.5rem; justify-content: flex-end; align-items: center; }
+        .modal-footer .select-actions { margin-right: auto; display: flex; gap: 0.5rem; }
+        .btn-link { background: none; border: none; color: #888; cursor: pointer; font-size: 0.8rem; padding: 0; }
+        .btn-link:hover { color: #fff; }
+        .btn-cancel { padding: 0.5rem 1rem; background: #333; color: #ccc; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+        .btn-cancel:hover { background: #444; }
+        .btn-primary { padding: 0.5rem 1.25rem; background: #ff4444; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; }
+        .btn-primary:hover { background: #cc3333; }
+        .btn-primary:disabled { background: #555; cursor: not-allowed; }
     </style>
 </head>
 <body>
@@ -56,7 +79,26 @@
             <h3>Import from Google Takeout</h3>
             <div class="import-form">
                 <input type="file" id="csv-file" accept=".csv,.zip">
-                <button onclick="importTakeout()">Import CSV</button>
+                <button id="import-btn" onclick="importTakeout()">Upload &amp; Preview</button>
+            </div>
+        </div>
+
+        <!-- Selection Modal -->
+        <div class="modal-overlay" id="select-modal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h2>Select Channels to Import</h2>
+                    <span class="count" id="select-count"></span>
+                </div>
+                <div class="modal-body" id="select-body"></div>
+                <div class="modal-footer">
+                    <div class="select-actions">
+                        <button class="btn-link" onclick="selectAll()">Select All</button>
+                        <button class="btn-link" onclick="deselectAll()">Deselect All</button>
+                    </div>
+                    <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+                    <button class="btn-primary" id="confirm-import-btn" onclick="confirmImport()">Import Selected</button>
+                </div>
             </div>
         </div>
 
@@ -151,6 +193,8 @@
             }
         }
 
+        let previewChannels = [];
+
         async function importTakeout() {
             const fileInput = document.getElementById('csv-file');
             const file = fileInput.files[0];
@@ -159,26 +203,111 @@
                 return;
             }
 
+            const btn = document.getElementById('import-btn');
+            btn.disabled = true;
+            btn.textContent = 'Parsing...';
+
             const formData = new FormData();
             formData.append('file', file);
 
             try {
-                const res = await fetch(API_BASE + '/api/import/takeout', {
+                const res = await fetch(API_BASE + '/api/import/preview', {
                     method: 'POST',
                     body: formData,
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    showStatus(data.detail || 'Parse failed', false);
+                    return;
+                }
+                previewChannels = data.channels;
+                showSelectionModal();
+            } catch (e) {
+                showStatus('Network error: ' + e.message, false);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Upload & Preview';
+            }
+        }
+
+        function showSelectionModal() {
+            const body = document.getElementById('select-body');
+            body.innerHTML = previewChannels.map((ch, i) => `
+                <label>
+                    <input type="checkbox" class="ch-check" data-index="${i}" checked onchange="updateCount()">
+                    <div style="flex:1;min-width:0;">
+                        <div class="ch-name">${escHtml(ch.name) || '(no title)'}</div>
+                        <div class="ch-url">${escHtml(ch.url)}</div>
+                    </div>
+                </label>
+            `).join('');
+
+            document.getElementById('select-modal').classList.add('active');
+            updateCount();
+        }
+
+        function closeModal() {
+            document.getElementById('select-modal').classList.remove('active');
+            previewChannels = [];
+        }
+
+        function selectAll() {
+            document.querySelectorAll('.ch-check').forEach(cb => cb.checked = true);
+            updateCount();
+        }
+
+        function deselectAll() {
+            document.querySelectorAll('.ch-check').forEach(cb => cb.checked = false);
+            updateCount();
+        }
+
+        function updateCount() {
+            const checked = document.querySelectorAll('.ch-check:checked').length;
+            document.getElementById('select-count').textContent = `${checked} / ${previewChannels.length} selected`;
+            document.getElementById('confirm-import-btn').textContent = `Import Selected (${checked})`;
+            document.getElementById('confirm-import-btn').disabled = checked === 0;
+        }
+
+        async function confirmImport() {
+            const checkboxes = document.querySelectorAll('.ch-check:checked');
+            const selected = Array.from(checkboxes).map(cb => {
+                const i = parseInt(cb.dataset.index);
+                return previewChannels[i];
+            });
+
+            if (selected.length === 0) return;
+
+            const btn = document.getElementById('confirm-import-btn');
+            btn.disabled = true;
+            btn.textContent = 'Importing...';
+
+            try {
+                const res = await fetch(API_BASE + '/api/import/takeout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ channels: selected }),
                 });
                 const data = await res.json();
                 if (res.ok) {
                     let msg = `Imported ${data.added} channels`;
                     if (data.skipped > 0) msg += `, ${data.skipped} skipped (duplicates)`;
                     showStatus(msg, true);
-                    setTimeout(() => location.reload(), 1000);
+                    closeModal();
+                    setTimeout(() => location.reload(), 800);
                 } else {
                     showStatus(data.detail || 'Import failed', false);
                 }
             } catch (e) {
                 showStatus('Network error: ' + e.message, false);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Import Selected';
             }
+        }
+
+        function escHtml(s) {
+            if (!s) return '';
+            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
 
         document.getElementById('url-input').addEventListener('keydown', (e) => {

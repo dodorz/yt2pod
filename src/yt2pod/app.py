@@ -124,8 +124,9 @@ async def proxy_stream(video_id: str):
     )
 
 
-@app.post("/api/import/takeout")
-async def import_takeout(file: UploadFile = File(...)):
+@app.post("/api/import/preview")
+async def import_preview(file: UploadFile = File(...)):
+    """Parse a Takeout CSV/ZIP and return the channel list for selection."""
     if not file.filename or not file.filename.lower().endswith((".csv", ".zip")):
         raise HTTPException(400, "Please upload a CSV or ZIP file from Google Takeout")
 
@@ -136,15 +137,30 @@ async def import_takeout(file: UploadFile = File(...)):
     if not channels:
         raise HTTPException(400, "No valid channels found in CSV")
 
+    return {"channels": channels, "total": len(channels)}
+
+
+@app.post("/api/import/takeout")
+async def import_takeout(request: Request):
+    """Import selected channels from a Takeout preview."""
+    body = await request.json()
+    channels = body.get("channels", [])
+    if not channels or not isinstance(channels, list):
+        raise HTTPException(400, "channels list is required")
+
     added = []
     skipped = []
     for ch in channels:
+        url = ch.get("url", "")
+        name = ch.get("name", "")
+        if not url:
+            continue
         with scheduler._lock:
-            if ch["url"] in [f.get("url") for f in scheduler._feeds.values()]:
-                skipped.append(ch["name"] or ch["url"])
+            if url in [f.get("url") for f in scheduler._feeds.values()]:
+                skipped.append(name or url)
                 continue
-        feed_id = scheduler.add_feed(ch["url"])
-        added.append(ch["name"] or feed_id)
+        feed_id = scheduler.add_feed(url, channel_name=name)
+        added.append(name or feed_id)
 
     return {"added": len(added), "skipped": len(skipped), "channels": added, "duplicates": skipped}
 
