@@ -18,7 +18,11 @@ from .scheduler import scheduler
 from .takeout import parse_takeout_csv
 from .youtube import fetch_feed
 
-app = FastAPI(title="YouTube2Podcast", version="0.1.0")
+app = FastAPI(
+    title="YouTube2Podcast",
+    version="0.1.0",
+    root_path=settings.root_path,
+)
 
 _templates_dir = str(importlib.resources.files("yt2pod").parent.parent / "templates")
 templates = Jinja2Templates(directory=_templates_dir)
@@ -38,7 +42,10 @@ async def shutdown():
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     feeds = scheduler.list_feeds()
-    return templates.TemplateResponse(request, "index.html", {"feeds": feeds})
+    return templates.TemplateResponse(
+        request, "index.html",
+        {"feeds": feeds, "root_path": settings.root_path},
+    )
 
 
 @app.post("/api/feeds")
@@ -53,11 +60,11 @@ async def add_feed(request: Request):
     if not feed:
         raise HTTPException(500, "Failed to fetch feed")
 
-    base_url = str(request.base_url).rstrip("/")
+    rss_url = str(request.url_for("get_feed", feed_id=feed_id))
     return {
         "feed_id": feed_id,
         "channel_name": feed.channel_name,
-        "rss_url": f"{base_url}/feeds/{feed_id}.xml",
+        "rss_url": rss_url,
     }
 
 
@@ -99,7 +106,7 @@ async def get_feed(feed_id: str, request: Request):
     if not feed:
         raise HTTPException(500, "Failed to generate feed")
 
-    base_url = str(request.base_url).rstrip("/")
+    base_url = str(request.url_for("index")).rstrip("/")
     rss_xml = generate_rss(feed, base_url)
     return Response(content=rss_xml, media_type="application/rss+xml")
 

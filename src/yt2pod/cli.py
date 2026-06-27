@@ -22,6 +22,8 @@ def main():
     cmd_serve = sub.add_parser("serve", help="Start the web server")
     cmd_serve.add_argument("--host", default=settings.host)
     cmd_serve.add_argument("--port", type=int, default=settings.port)
+    cmd_serve.add_argument("--root-path", default=settings.root_path,
+                           help="URL path prefix for reverse proxy (e.g. /yt2pod)")
 
     cmd_gen = sub.add_parser("generate", help="Generate RSS feed to a file")
     cmd_gen.add_argument("url", help="YouTube channel or playlist URL")
@@ -40,7 +42,7 @@ def main():
     args = parser.parse_args()
 
     if args.command == "serve":
-        _run_server(args.host, args.port)
+        _run_server(args.host, args.port, root_path=getattr(args, "root_path", ""))
     elif args.command == "generate":
         _generate_feed(args.url, args.output, args.max_videos)
     elif args.command == "add":
@@ -55,9 +57,17 @@ def main():
         parser.print_help()
 
 
-def _run_server(host: str, port: int):
+def _run_server(host: str, port: int, root_path: str = ""):
     import uvicorn
-    uvicorn.run("yt2pod.app:app", host=host, port=port, reload=False)
+    # Update the settings singleton so uvicorn's fresh import reads the correct value
+    settings.root_path = root_path
+    uvicorn.run(
+        "yt2pod.app:app",
+        host=host,
+        port=port,
+        reload=False,
+        proxy_headers=bool(root_path),
+    )
 
 
 def _generate_feed(url: str, output: str, max_videos: int):

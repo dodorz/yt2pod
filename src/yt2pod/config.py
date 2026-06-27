@@ -11,6 +11,7 @@ class Settings(BaseSettings):
 
     host: str = "0.0.0.0"
     port: int = 14732
+    root_path: str = ""
     data_dir: Path = Path("data")
     cache_ttl: int = 3600
     update_interval: int = 3600

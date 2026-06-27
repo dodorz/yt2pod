@@ -70,7 +70,7 @@
                     </div>
                 </div>
                 <div class="feed-actions">
-                    <a href="/feeds/{{ feed.feed_id }}.xml" class="btn-sm btn-rss" target="_blank">RSS</a>
+                    <a href="{{ root_path }}/feeds/{{ feed.feed_id }}.xml" class="btn-sm btn-rss" target="_blank">RSS</a>
                     <button class="btn-sm btn-refresh" onclick="refreshFeed('{{ feed.feed_id }}')">Refresh</button>
                     <button class="btn-sm btn-delete" onclick="deleteFeed('{{ feed.feed_id }}')">Delete</button>
                 </div>
@@ -84,6 +84,8 @@
     </div>
 
     <script>
+        const API_BASE = '{{ root_path }}';
+
         function showStatus(msg, ok) {
             const el = document.getElementById('status');
             el.textContent = msg;
@@ -101,7 +103,7 @@
             btn.textContent = 'Adding...';
 
             try {
-                const res = await fetch('/api/feeds', {
+                const res = await fetch(API_BASE + '/api/feeds', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ url }),
@@ -124,7 +126,7 @@
 
         async function refreshFeed(feedId) {
             try {
-                const res = await fetch(`/api/feeds/${feedId}/refresh`, { method: 'POST' });
+                const res = await fetch(API_BASE + `/api/feeds/${feedId}/refresh`, { method: 'POST' });
                 const data = await res.json();
                 if (res.ok) {
                     showStatus(`Refreshed: ${data.channel_name} (${data.video_count} videos)`, true);
@@ -139,7 +141,7 @@
         async function deleteFeed(feedId) {
             if (!confirm('Delete this feed?')) return;
             try {
-                const res = await fetch(`/api/feeds/${feedId}`, { method: 'DELETE' });
+                const res = await fetch(API_BASE + `/api/feeds/${feedId}`, { method: 'DELETE' });
                 if (res.ok) {
                     document.getElementById('feed-' + feedId)?.remove();
                     showStatus('Feed deleted', true);
@@ -161,7 +163,7 @@
             formData.append('file', file);
 
             try {
-                const res = await fetch('/api/import/takeout', {
+                const res = await fetch(API_BASE + '/api/import/takeout', {
                     method: 'POST',
                     body: formData,
                 });
