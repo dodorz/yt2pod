@@ -11,11 +11,12 @@ from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from .config import settings
+from .export import export_csv, export_opml
 from .models import Feed
 from .proxy import proxy_audio
 from .rss import generate_rss
 from .scheduler import scheduler
-from .takeout import parse_takeout_csv
+from .takeout import parse_takeout_csv, parse_takeout_zip_bytes
 from .youtube import fetch_feed
 
 app = FastAPI(
@@ -131,11 +132,14 @@ async def import_preview(file: UploadFile = File(...)):
         raise HTTPException(400, "Please upload a CSV or ZIP file from Google Takeout")
 
     content = await file.read()
-    text = content.decode("utf-8-sig")
-    channels = parse_takeout_csv(text)
+    if file.filename and file.filename.lower().endswith(".zip"):
+        channels = parse_takeout_zip_bytes(content)
+    else:
+        text = content.decode("utf-8-sig")
+        channels = parse_takeout_csv(text)
 
     if not channels:
-        raise HTTPException(400, "No valid channels found in CSV")
+        raise HTTPException(400, "No valid channels found in file")
 
     return {"channels": channels, "total": len(channels)}
 
@@ -163,6 +167,35 @@ async def import_takeout(request: Request):
         added.append(name or feed_id)
 
     return {"added": len(added), "skipped": len(skipped), "channels": added, "duplicates": skipped}
+
+
+@app.get("/api/export/csv")
+async def export_feeds_csv():
+    """Download all registered feeds as a CSV file."""
+    feeds = scheduler.list_feeds()
+    if not feeds:
+        raise HTTPException(404, "No feeds registered")
+    csv_content = export_csv(feeds)
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=feeds.csv"},
+    )
+
+
+@app.get("/api/export/opml")
+async def export_feeds_opml(request: Request):
+    """Download all registered feeds as an OPML file."""
+    feeds = scheduler.list_feeds()
+    if not feeds:
+        raise HTTPException(404, "No feeds registered")
+    base_url = str(request.base_url).rstrip("/")
+    opml_content = export_opml(feeds, base_url)
+    return Response(
+        content=opml_content,
+        media_type="text/x-opml",
+        headers={"Content-Disposition": "attachment; filename=feeds.opml"},
+    )
 
 
 @app.get("/api/preview")

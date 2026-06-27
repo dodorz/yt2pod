@@ -38,6 +38,10 @@
         .import-form input[type="file"] { flex: 1; padding: 0.5rem; background: #0f0f0f; border: 1px solid #333; border-radius: 6px; color: #fff; }
         .import-form button { padding: 0.5rem 1rem; background: #333; color: #ccc; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
         .import-form button:hover { background: #444; }
+        .export-section { margin-bottom: 2rem; padding: 1rem; background: #1a1a1a; border-radius: 8px; display: flex; align-items: center; gap: 1rem; }
+        .export-section h3 { color: #888; font-size: 0.9rem; white-space: nowrap; }
+        .export-section .btn-export { padding: 0.4rem 0.8rem; background: #333; color: #ccc; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; text-decoration: none; }
+        .export-section .btn-export:hover { background: #444; color: #fff; }
 
         /* Selection modal */
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; }
@@ -81,6 +85,12 @@
                 <input type="file" id="csv-file" accept=".csv,.zip">
                 <button id="import-btn" onclick="importTakeout()">Upload &amp; Preview</button>
             </div>
+        </div>
+
+        <div class="export-section">
+            <h3>Export:</h3>
+            <a class="btn-export" href="{{ root_path }}/api/export/csv" target="_blank">CSV</a>
+            <a class="btn-export" href="{{ root_path }}/api/export/opml" target="_blank">OPML</a>
         </div>
 
         <!-- Selection Modal -->

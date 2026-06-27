@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from .config import settings
+from .export import export_csv, export_opml
 from .rss import generate_rss
 from .scheduler import scheduler
 from .takeout import parse_takeout_file
@@ -37,6 +38,14 @@ def main():
     cmd_import.add_argument("csv_file", help="Path to subscriptions.csv from Google Takeout")
     cmd_import.add_argument("-a", "--all", action="store_true", help="Import all channels without prompting")
 
+    cmd_export_csv = sub.add_parser("export-csv", help="Export feeds as CSV")
+    cmd_export_csv.add_argument("-o", "--output", default="feeds.csv", help="Output file path")
+
+    cmd_export_opml = sub.add_parser("export-opml", help="Export feeds as OPML")
+    cmd_export_opml.add_argument("-o", "--output", default="feeds.opml", help="Output file path")
+    cmd_export_opml.add_argument("--base-url", default="http://localhost:8000",
+                                 help="Base URL for RSS feed links (default: http://localhost:8000)")
+
     cmd_list = sub.add_parser("list", help="List scheduled feeds")
     cmd_refresh = sub.add_parser("refresh", help="Refresh all feeds")
 
@@ -50,6 +59,10 @@ def main():
         _add_feed(args.url)
     elif args.command == "import-takeout":
         _import_takeout(args.csv_file, import_all=args.all)
+    elif args.command == "export-csv":
+        _export_csv_cmd(args.output)
+    elif args.command == "export-opml":
+        _export_opml_cmd(args.output, args.base_url)
     elif args.command == "list":
         _list_feeds()
     elif args.command == "refresh":
@@ -187,6 +200,26 @@ def _refresh_all():
     for feed_id, ok in results.items():
         status = "OK" if ok else "FAILED"
         print(f"  {feed_id}: {status}")
+
+
+def _export_csv_cmd(output: str):
+    feeds = scheduler.list_feeds()
+    if not feeds:
+        print("No feeds registered.")
+        return
+    csv_content = export_csv(feeds)
+    Path(output).write_text(csv_content, encoding="utf-8")
+    print(f"Exported {len(feeds)} feeds to {output}")
+
+
+def _export_opml_cmd(output: str, base_url: str):
+    feeds = scheduler.list_feeds()
+    if not feeds:
+        print("No feeds registered.")
+        return
+    opml_content = export_opml(feeds, base_url)
+    Path(output).write_text(opml_content, encoding="utf-8")
+    print(f"Exported {len(feeds)} feeds to {output}")
 
 
 if __name__ == "__main__":

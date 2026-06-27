@@ -55,10 +55,15 @@ def parse_takeout_file(file_path: Path) -> list[dict[str, str]]:
 
 def parse_takeout_zip(zip_path: Path) -> list[dict[str, str]]:
     """Extract and parse subscription CSVs from a Google Takeout ZIP."""
+    return parse_takeout_zip_bytes(zip_path.read_bytes())
+
+
+def parse_takeout_zip_bytes(zip_bytes: bytes) -> list[dict[str, str]]:
+    """Extract and parse subscription CSVs from a Google Takeout ZIP (bytes)."""
     all_channels = []
     seen_urls: set[str] = set()
 
-    with zipfile.ZipFile(zip_path, "r") as zf:
+    with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as zf:
         csv_files = _find_subscription_csvs(zf)
         if not csv_files:
             csv_files = _find_any_youtube_csvs(zf)
