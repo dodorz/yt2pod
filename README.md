@@ -12,7 +12,7 @@ Convert YouTube channels and playlists into podcast RSS feeds.
   Both support HTTP Range/HEAD (seeking, resumable playback), and RSS never
   contains expiring YouTube URLs
 - **Scheduled Updates**: Auto-refresh feeds at configurable intervals
-- **Google Takeout import / CSV + OPML export**
+- **Google Takeout import / CSV + OPML export** (OPML groups audio and video feeds)
 
 ## Usage
 
@@ -98,6 +98,18 @@ Media proxy (used by the RSS enclosure; `type` is `audio` or `video`):
 ```
 http://localhost:8000/proxy/{video_id}?type=audio
 ```
+
+## Export
+
+```bash
+uv run yt2pod export-csv -o feeds.csv
+uv run yt2pod export-opml -o feeds.opml --base-url http://myhost:14732
+```
+
+The web UI exposes `GET /api/export/csv` and `GET /api/export/opml`
+(the latter accepts an optional `?base_url=` to override the feed URLs).
+When a mix of audio and video feeds exists, the OPML file groups them into
+`Audio`/`Video` folders and includes the original YouTube URL as `htmlUrl`.
 
 ## Requirements
 

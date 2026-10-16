@@ -11,7 +11,7 @@
   模式（**零磁盘占用**，按需转发）。两者都支持 HTTP Range/HEAD（拖拽进度、断点续传），
   RSS 中不包含会过期的 YouTube 链接
 - **定时更新**：在可配置的时间间隔内自动刷新订阅源
-- **支持 Google Takeout 导入 / CSV + OPML 导出**
+- **支持 Google Takeout 导入 / CSV + OPML 导出**（OPML 按音频/视频分组）
 
 ## 使用方法
 
@@ -94,6 +94,18 @@ http://localhost:8000/feeds/{feed_id}.xml
 ```
 http://localhost:8000/proxy/{video_id}?type=audio
 ```
+
+## 导出
+
+```bash
+uv run --directory . yt2pod export-csv -o feeds.csv
+uv run --directory . yt2pod export-opml -o feeds.opml --base-url http://myhost:14732
+```
+
+Web UI 提供 `GET /api/export/csv` 和 `GET /api/export/opml`
+（后者可加可选参数 `?base_url=` 覆盖订阅源链接）。
+当同时存在音频和视频订阅源时，OPML 会分组为 `Audio`/`Video` 文件夹，
+并为每个条目附带原始 YouTube 链接（`htmlUrl`）。
 
 ## 要求
 

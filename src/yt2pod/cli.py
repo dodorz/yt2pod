@@ -227,9 +227,6 @@ def _export_csv_cmd(output: str):
 
 def _export_opml_cmd(output: str, base_url: str):
     feeds = scheduler.list_feeds()
-    if not feeds:
-        print("No feeds registered.")
-        return
     opml_content = export_opml(feeds, base_url)
     Path(output).write_text(opml_content, encoding="utf-8")
     print(f"Exported {len(feeds)} feeds to {output}")

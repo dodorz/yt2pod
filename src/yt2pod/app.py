@@ -244,13 +244,15 @@ async def export_feeds_csv():
 
 
 @app.get("/api/export/opml")
-async def export_feeds_opml(request: Request):
-    """Download all registered feeds as an OPML file."""
+async def export_feeds_opml(request: Request, base_url: str | None = None):
+    """Download all registered feeds as an OPML file.
+
+    Returns a valid (possibly empty) OPML document, and accepts an optional
+    ``?base_url=`` override for the feed URLs (useful behind a reverse proxy).
+    """
     feeds = scheduler.list_feeds()
-    if not feeds:
-        raise HTTPException(404, "No feeds registered")
-    base_url = str(request.base_url).rstrip("/")
-    opml_content = export_opml(feeds, base_url)
+    resolved = (base_url or str(request.base_url)).rstrip("/")
+    opml_content = export_opml(feeds, resolved)
     return Response(
         content=opml_content,
         media_type="text/x-opml",

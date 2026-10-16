@@ -152,6 +152,34 @@ class TestExport:
         out = export_opml(feeds, "http://x")
         assert 'xmlUrl="http://x/feeds/UC1.xml"' in out
 
+    def test_opml_empty_is_valid(self):
+        root = ElementTree.fromstring(export_opml([], "http://x"))
+        assert root.tag == "opml"
+        assert root.find("body") is not None
+
+    def test_opml_groups_audio_and_video(self):
+        feeds = [
+            {"feed_id": "A", "channel_name": "A", "media_type": "audio", "url": "https://yt/a"},
+            {"feed_id": "V", "channel_name": "V", "media_type": "video", "url": "https://yt/v"},
+        ]
+        out = export_opml(feeds, "http://x")
+        root = ElementTree.fromstring(out)
+        folders = {o.get("text") for o in root.find("body").findall("outline")}
+        assert folders == {"Audio", "Video"}
+        assert 'htmlUrl="https://yt/a"' in out
+        assert 'type="rss"' in out
+
+    def test_opml_single_type_is_flat(self):
+        feeds = [
+            {"feed_id": "A", "channel_name": "A", "media_type": "audio"},
+            {"feed_id": "B", "channel_name": "B", "media_type": "audio"},
+        ]
+        root = ElementTree.fromstring(export_opml(feeds, "http://x"))
+        body = root.find("body")
+        outlines = body.findall("outline")
+        assert len(outlines) == 2
+        assert all(o.get("type") == "rss" for o in outlines)
+
 
 class TestSchedulerIndexMigration:
     def test_scheduler_migrates_old_index(self, tmp_path, monkeypatch):
