@@ -9,13 +9,13 @@ from xml.etree.ElementTree import Element, SubElement, tostring
 
 
 def export_csv(feeds: list[dict]) -> str:
-    """Generate a CSV string with Channel Name and Channel URL columns."""
+    """Generate a CSV string with Channel Name, Channel URL and type columns."""
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(["Channel Name", "Channel URL"])
+    writer.writerow(["Channel Name", "Channel URL", "Type"])
     for f in feeds:
         name = f.get("channel_name") or f.get("feed_id", "")
-        writer.writerow([name, f.get("url", "")])
+        writer.writerow([name, f.get("url", ""), f.get("media_type", "audio")])
     return buf.getvalue()
 
 

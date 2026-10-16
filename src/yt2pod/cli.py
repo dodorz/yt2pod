@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
-import sys
 from pathlib import Path
 
 from .config import settings
@@ -10,7 +8,7 @@ from .export import export_csv, export_opml
 from .rss import generate_rss
 from .scheduler import scheduler
 from .takeout import parse_takeout_file
-from .youtube import fetch_feed
+from .youtube import fetch_feed, normalize_media_type
 
 
 def main():
@@ -30,9 +28,19 @@ def main():
     cmd_gen.add_argument("url", help="YouTube channel or playlist URL")
     cmd_gen.add_argument("-o", "--output", default="feed.xml", help="Output file path")
     cmd_gen.add_argument("-n", "--max-videos", type=int, default=settings.max_videos)
+    cmd_gen.add_argument("--recent-days", type=int, default=settings.recent_days,
+                         help="Enrich/resolve videos within this many days (0 to disable)")
+    cmd_gen.add_argument("--base-url", default=settings.base_url,
+                         help=f"Base URL for enclosure links (default: {settings.base_url})")
+    cmd_gen.add_argument("--type", dest="media_type", choices=["audio", "video"],
+                         default=settings.default_media_type,
+                         help="Publish as an audio or video podcast (default: %(default)s)")
 
     cmd_add = sub.add_parser("add", help="Add a feed to the scheduler")
     cmd_add.add_argument("url", help="YouTube channel or playlist URL")
+    cmd_add.add_argument("--type", dest="media_type", choices=["audio", "video"],
+                         default=settings.default_media_type,
+                         help="Publish as an audio or video podcast (default: %(default)s)")
 
     cmd_import = sub.add_parser("import-takeout", help="Import subscriptions from Google Takeout CSV")
     cmd_import.add_argument("csv_file", help="Path to subscriptions.csv from Google Takeout")
@@ -46,17 +54,18 @@ def main():
     cmd_export_opml.add_argument("--base-url", default="http://localhost:8000",
                                  help="Base URL for RSS feed links (default: http://localhost:8000)")
 
-    cmd_list = sub.add_parser("list", help="List scheduled feeds")
-    cmd_refresh = sub.add_parser("refresh", help="Refresh all feeds")
+    sub.add_parser("list", help="List scheduled feeds")
+    sub.add_parser("refresh", help="Refresh all feeds")
 
     args = parser.parse_args()
 
     if args.command == "serve":
         _run_server(args.host, args.port, root_path=getattr(args, "root_path", ""))
     elif args.command == "generate":
-        _generate_feed(args.url, args.output, args.max_videos)
+        _generate_feed(args.url, args.output, args.max_videos, args.recent_days,
+                       args.base_url, args.media_type)
     elif args.command == "add":
-        _add_feed(args.url)
+        _add_feed(args.url, args.media_type)
     elif args.command == "import-takeout":
         _import_takeout(args.csv_file, import_all=args.all)
     elif args.command == "export-csv":
@@ -84,22 +93,26 @@ def _run_server(host: str, port: int, root_path: str = ""):
     )
 
 
-def _generate_feed(url: str, output: str, max_videos: int):
-    print(f"Fetching feed from: {url}")
-    feed = fetch_feed(url, max_videos)
-    rss_xml = generate_rss(feed)
+def _generate_feed(url: str, output: str, max_videos: int, recent_days: int = 30,
+                   base_url: str = "", media_type: str = "audio"):
+    base_url = base_url or settings.base_url
+    media_type = normalize_media_type(media_type)
+    print(f"Fetching feed from: {url} ({media_type})")
+    feed = fetch_feed(url, max_videos, recent_days=recent_days, media_type=media_type)
+    rss_xml = generate_rss(feed, base_url=base_url)
     Path(output).write_text(rss_xml, encoding="utf-8")
     print(f"Feed generated: {output} ({len(feed.videos)} videos)")
     print(f"Channel: {feed.channel_name}")
 
 
-def _add_feed(url: str):
-    feed_id = scheduler.add_feed(url)
-    feed = scheduler.refresh_feed(feed_id)
-    if feed:
-        print(f"Added feed: {feed.channel_name} (id: {feed_id})")
-    else:
-        print(f"Added feed with id: {feed_id} (refresh pending)")
+def _add_feed(url: str, media_type: str = "audio"):
+    media_type = normalize_media_type(media_type)
+    feed = fetch_feed(url, recent_days=settings.recent_days, media_type=media_type)
+    feed_id = scheduler.add_feed(
+        url, feed_id=feed.feed_id, channel_name=feed.channel_name, media_type=media_type
+    )
+    scheduler.save_feed(feed_id, feed)
+    print(f"Added feed: {feed.channel_name} (id: {feed_id}, type: {feed.media_type})")
 
 
 def _import_takeout(csv_path: str, import_all: bool = False):
@@ -181,7 +194,7 @@ def _interactive_select(channels: list[dict[str, str]]) -> list[int]:
                 print(f"  Warning: invalid number '{part}', skipping")
 
     # Deduplicate, sort, and clamp to valid range
-    return sorted(set(i for i in selected if 0 <= i < len(channels)))
+    return sorted({i for i in selected if 0 <= i < len(channels)})
 
 
 def _list_feeds():

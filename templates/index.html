@@ -16,6 +16,11 @@
         .add-form button { padding: 0.75rem 1.5rem; background: #ff4444; color: #fff; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; font-weight: 600; }
         .add-form button:hover { background: #cc3333; }
         .add-form button:disabled { background: #555; cursor: not-allowed; }
+        .add-form select { padding: 0.75rem; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; color: #fff; font-size: 1rem; cursor: pointer; }
+        .type-badge { display: inline-block; padding: 0.1rem 0.45rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; margin-right: 0.4rem; vertical-align: middle; }
+        .type-audio { background: #16324a; color: #6cb6ff; }
+        .type-video { background: #4a2a16; color: #ffb46c; }
+        .type-select { background: #0f0f0f; border: 1px solid #333; border-radius: 6px; color: #ccc; font-size: 0.8rem; padding: 0.35rem 0.4rem; cursor: pointer; }
         .feed-list { list-style: none; }
         .feed-item { display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: #1a1a1a; border-radius: 8px; margin-bottom: 0.5rem; }
         .feed-info { flex: 1; min-width: 0; }
@@ -36,6 +41,7 @@
         .import-section h3 { margin-bottom: 0.5rem; color: #888; font-size: 0.9rem; }
         .import-form { display: flex; gap: 0.5rem; align-items: center; }
         .import-form input[type="file"] { flex: 1; padding: 0.5rem; background: #0f0f0f; border: 1px solid #333; border-radius: 6px; color: #fff; }
+        .import-form select { padding: 0.5rem; background: #0f0f0f; border: 1px solid #333; border-radius: 6px; color: #fff; cursor: pointer; }
         .import-form button { padding: 0.5rem 1rem; background: #333; color: #ccc; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
         .import-form button:hover { background: #444; }
         .export-section { margin-bottom: 2rem; padding: 1rem; background: #1a1a1a; border-radius: 8px; display: flex; align-items: center; gap: 1rem; }
@@ -76,6 +82,10 @@
 
         <div class="add-form">
             <input type="text" id="url-input" placeholder="YouTube channel or playlist URL...">
+            <select id="type-input" title="Podcast format">
+                <option value="audio">Audio</option>
+                <option value="video">Video</option>
+            </select>
             <button id="add-btn" onclick="addFeed()">Add Feed</button>
         </div>
 
@@ -83,6 +93,10 @@
             <h3>Import from Google Takeout</h3>
             <div class="import-form">
                 <input type="file" id="csv-file" accept=".csv,.zip">
+                <select id="import-type" title="Podcast format">
+                    <option value="audio">Audio</option>
+                    <option value="video">Video</option>
+                </select>
                 <button id="import-btn" onclick="importTakeout()">Upload &amp; Preview</button>
             </div>
         </div>
@@ -116,12 +130,18 @@
             {% for feed in feeds %}
             <li class="feed-item" id="feed-{{ feed.feed_id }}">
                 <div class="feed-info">
-                    <div class="feed-name">{{ feed.get('channel_name', feed.feed_id) }}</div>
+                    <div class="feed-name">
+                        <span class="type-badge type-{{ feed.get('media_type', 'audio') }}">{{ feed.get('media_type', 'audio') }}</span>{{ feed.get('channel_name', feed.feed_id) }}
+                    </div>
                     <div class="feed-meta">
                         ID: {{ feed.feed_id }} &middot; Last update: {{ feed.get('last_update', 'never') }}
                     </div>
                 </div>
                 <div class="feed-actions">
+                    <select class="type-select" onchange="changeMediaType('{{ feed.feed_id }}', this)" title="Podcast format">
+                        <option value="audio" {% if feed.get('media_type', 'audio') == 'audio' %}selected{% endif %}>Audio</option>
+                        <option value="video" {% if feed.get('media_type', 'audio') == 'video' %}selected{% endif %}>Video</option>
+                    </select>
                     <a href="{{ root_path }}/feeds/{{ feed.feed_id }}.xml" class="btn-sm btn-rss" target="_blank">RSS</a>
                     <button class="btn-sm btn-refresh" onclick="refreshFeed('{{ feed.feed_id }}')">Refresh</button>
                     <button class="btn-sm btn-delete" onclick="deleteFeed('{{ feed.feed_id }}')">Delete</button>
@@ -149,6 +169,7 @@
             const input = document.getElementById('url-input');
             const url = input.value.trim();
             if (!url) return;
+            const mediaType = document.getElementById('type-input').value;
 
             const btn = document.getElementById('add-btn');
             btn.disabled = true;
@@ -158,13 +179,13 @@
                 const res = await fetch(API_BASE + '/api/feeds', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url }),
+                    body: JSON.stringify({ url, media_type: mediaType }),
                 });
                 const data = await res.json();
                 if (res.ok) {
-                    showStatus(`Added: ${data.channel_name}. RSS: ${data.rss_url}`, true);
+                    showStatus(`Added: ${data.channel_name} (${data.media_type}, ${data.video_count} videos). RSS: ${data.rss_url}`, true);
                     input.value = '';
-                    setTimeout(() => location.reload(), 1000);
+                    setTimeout(() => location.reload(), 1200);
                 } else {
                     showStatus(data.detail || 'Failed to add feed', false);
                 }
@@ -173,6 +194,30 @@
             } finally {
                 btn.disabled = false;
                 btn.textContent = 'Add Feed';
+            }
+        }
+
+        async function changeMediaType(feedId, select) {
+            const mediaType = select.value;
+            select.disabled = true;
+            try {
+                const res = await fetch(API_BASE + `/api/feeds/${feedId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ media_type: mediaType }),
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showStatus(`Switched to ${data.media_type} (${data.video_count} videos)`, true);
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showStatus(data.detail || 'Update failed', false);
+                    setTimeout(() => location.reload(), 1000);
+                }
+            } catch (e) {
+                showStatus('Network error: ' + e.message, false);
+            } finally {
+                select.disabled = false;
             }
         }
 
@@ -295,7 +340,10 @@
                 const res = await fetch(API_BASE + '/api/import/takeout', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ channels: selected }),
+                    body: JSON.stringify({
+                        channels: selected,
+                        media_type: document.getElementById('import-type').value,
+                    }),
                 });
                 const data = await res.json();
                 if (res.ok) {

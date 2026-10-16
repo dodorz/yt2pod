@@ -1,2 +1,1 @@
-[project]
-name = "yt2pod"
+"""yt2pod test suite."""

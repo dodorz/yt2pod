@@ -3,13 +3,11 @@ from __future__ import annotations
 import json
 import threading
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Callable
 
 from .config import settings
 from .models import Feed
 from .rss import generate_rss
-from .youtube import fetch_feed
+from .youtube import extract_channel_id, fetch_feed, normalize_media_type
 
 
 class FeedScheduler:
@@ -21,13 +19,36 @@ class FeedScheduler:
         self._running = False
         self._timer: threading.Timer | None = None
 
-    def add_feed(self, url: str, feed_id: str | None = None, channel_name: str = "") -> str:
+    def add_feed(
+        self,
+        url: str,
+        feed_id: str | None = None,
+        channel_name: str = "",
+        media_type: str | None = None,
+    ) -> str:
+        if feed_id is None:
+            feed_id = extract_channel_id(url)
         with self._lock:
-            if feed_id is None:
-                feed_id = url.rsplit("/", 1)[-1] or url.rsplit("/", 2)[-2]
-            self._feeds[feed_id] = {"url": url, "last_update": None, "feed_id": feed_id, "channel_name": channel_name}
+            existing = self._feeds.get(feed_id, {})
+            self._feeds[feed_id] = {
+                "url": url,
+                "last_update": existing.get("last_update"),
+                "feed_id": feed_id,
+                "channel_name": channel_name or existing.get("channel_name", ""),
+                "media_type": normalize_media_type(
+                    media_type or existing.get("media_type") or settings.default_media_type
+                ),
+            }
             self._save_index()
-            return feed_id
+        return feed_id
+
+    def set_media_type(self, feed_id: str, media_type: str) -> bool:
+        with self._lock:
+            if feed_id not in self._feeds:
+                return False
+            self._feeds[feed_id]["media_type"] = normalize_media_type(media_type)
+            self._save_index()
+        return True
 
     def remove_feed(self, feed_id: str) -> bool:
         with self._lock:
@@ -41,33 +62,52 @@ class FeedScheduler:
         with self._lock:
             return list(self._feeds.values())
 
+    def get_feed(self, feed_id: str) -> dict | None:
+        with self._lock:
+            feed = self._feeds.get(feed_id)
+            return dict(feed) if feed else None
+
+    def save_feed(self, feed_id: str, feed: Feed) -> None:
+        """Write the generated RSS for *feed* and update the index entry."""
+        rss_xml = generate_rss(feed, base_url=settings.base_url)
+        feed_path = settings.feeds_dir / f"{feed_id}.xml"
+        feed_path.write_text(rss_xml, encoding="utf-8")
+
+        with self._lock:
+            entry = self._feeds.setdefault(
+                feed_id,
+                {
+                    "url": feed.link,
+                    "feed_id": feed_id,
+                    "channel_name": feed.channel_name,
+                    "media_type": feed.media_type,
+                },
+            )
+            entry["last_update"] = datetime.now(timezone.utc).isoformat()
+            entry["channel_name"] = feed.channel_name
+            entry["media_type"] = feed.media_type
+            self._save_index()
+
     def refresh_feed(self, feed_id: str) -> Feed | None:
         with self._lock:
             if feed_id not in self._feeds:
                 return None
             url = self._feeds[feed_id]["url"]
+            media_type = self._feeds[feed_id].get("media_type") or settings.default_media_type
 
         try:
-            feed = fetch_feed(url)
-            rss_xml = generate_rss(feed)
-            feed_path = settings.feeds_dir / f"{feed_id}.xml"
-            feed_path.write_text(rss_xml, encoding="utf-8")
-
-            with self._lock:
-                self._feeds[feed_id]["last_update"] = datetime.now(timezone.utc).isoformat()
-                self._feeds[feed_id]["channel_name"] = feed.channel_name
-                self._save_index()
-
+            feed = fetch_feed(url, recent_days=settings.recent_days, media_type=media_type)
+            self.save_feed(feed_id, feed)
             return feed
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - keep scheduler alive on any failure
             print(f"Error refreshing feed {feed_id}: {e}")
             return None
 
     def refresh_all(self) -> dict[str, bool]:
-        results = {}
         with self._lock:
             feed_ids = list(self._feeds.keys())
 
+        results = {}
         for feed_id in feed_ids:
             result = self.refresh_feed(feed_id)
             results[feed_id] = result is not None
@@ -102,11 +142,18 @@ class FeedScheduler:
 
     def _load_index(self) -> None:
         index_path = settings.data_dir / "feeds_index.json"
-        if index_path.exists():
-            try:
-                self._feeds = json.loads(index_path.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
-                self._feeds = {}
+        if not index_path.exists():
+            return
+        try:
+            loaded = json.loads(index_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return
+
+        # Migrate older index files that predate per-feed media types.
+        for feed_id, entry in loaded.items():
+            entry.setdefault("feed_id", feed_id)
+            entry.setdefault("media_type", settings.default_media_type)
+        self._feeds = loaded
 
 
 scheduler = FeedScheduler()

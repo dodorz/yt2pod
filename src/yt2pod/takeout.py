@@ -5,7 +5,6 @@ import io
 import zipfile
 from pathlib import Path
 
-
 _SUBSCRIPTION_KEYWORDS = {"subscriptions", "订阅"}
 _PLAYLIST_KEYWORDS = {"playlists", "播放列表"}
 _YOUTUBE_KEYWORDS = {"youtube", "youtube music", "youtube 和 youtube music", "youtube and youtube music"}
