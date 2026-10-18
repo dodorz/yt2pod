@@ -251,7 +251,7 @@ async def export_feeds_opml(request: Request, base_url: str | None = None):
     ``?base_url=`` override for the feed URLs (useful behind a reverse proxy).
     """
     feeds = scheduler.list_feeds()
-    resolved = (base_url or str(request.base_url)).rstrip("/")
+    resolved = (base_url or settings.base_url).rstrip("/")
     opml_content = export_opml(feeds, resolved)
     return Response(
         content=opml_content,
